@@ -1,55 +1,49 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
+	"database/sql"
+	fmt "fmt"
+	log "log"
 
-	"github.com/gorilla/mux"
+	_ "github.com/go-sql-driver/mysql"
+	uuid "github.com/google/uuid"
 )
 
-type Product struct {
-	ID       string
-	Name     string
-	Quantity int
-	Price    float64
-}
-
-var products []Product
-
-func homepage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "Welcome to the homepage!")
-	log.Println("Endpoint Hit: homepage")
-}
-func returnAllProducts(w http.ResponseWriter, r *http.Request) {
-	log.Println("Endpoint Hit: returnAllProducts")
-	json.NewEncoder(w).Encode(products)
-}
-func getProduct(w http.ResponseWriter, r *http.Request) {
-	log.Println("Endpoint Hit: getProduct")
-	vars := mux.Vars(r)
-	id := vars["id"]
-	for _, product := range products {
-		if string(product.ID) == id {
-			json.NewEncoder(w).Encode(product)
-			return
-		}
+func checkErr(err error) {
+	if err != nil {
+		log.Fatal(err)
 	}
-	http.Error(w, "Product not found", http.StatusNotFound)
 }
-func handleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/", homepage)
-	myRouter.HandleFunc("/products", returnAllProducts)
-	myRouter.HandleFunc("/product/{id}", getProduct)
-	http.ListenAndServe("localhost:5001", myRouter)
+
+type Data struct {
+	ID   uuid.UUID
+	Name string
 }
+
 func main() {
-	products = []Product{
-		{ID: "1", Name: "Chair", Quantity: 10, Price: 19.99},
-		{ID: "2", Name: "Table", Quantity: 5, Price: 29.99},
-		{ID: "3", Name: "Sofa", Quantity: 20, Price: 9.99},
+	connectionString := fmt.Sprintf("%s:%s@tcp(127.0.0.1:3306)/%s", DBUser, DBPassword, DBName)
+	db, err := sql.Open("mysql", connectionString)
+	checkErr(err)
+	defer db.Close()
+
+	// ADD DATA to table
+	result, err := db.Exec("INSERT INTO data (name) VALUES ( 'Mangmang Smangmang')")
+	checkErr(err)
+	lastInsertID, err := result.LastInsertId()
+	checkErr(err)
+	fmt.Println("Last Insert ID:", lastInsertID)
+	rowsAffected, err := result.RowsAffected()
+	checkErr(err)
+	fmt.Println("Rows Affected:", rowsAffected)
+
+	// RETRIEVE DATA from table
+
+	rows, err := db.Query("SELECT * FROM data")
+	checkErr(err)
+	for rows.Next() {
+		var data Data
+		err = rows.Scan(&data.ID, &data.Name)
+		checkErr(err)
+		fmt.Println(data.ID, data.Name)
 	}
-	handleRequests()
 }
